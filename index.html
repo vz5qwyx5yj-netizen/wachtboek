@@ -1,0 +1,552 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0a4a78">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>Wachtboek</title>
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+  :root{
+    --bg:#0a4a78;
+    --bg2:#083a5f;
+    --card:#ffffff;
+    --card-border:#dbe6ee;
+    --text:#0f2a3d;
+    --muted:#5b7d92;
+    --accent:#0a4a78;
+    --accent2:#12699e;
+    --ok:#1c8a4c;
+    --danger:#c0392b;
+    --radius:14px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent;}
+  html,body{margin:0;padding:0;}
+  body{
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
+    background:linear-gradient(180deg,var(--bg),var(--bg2));
+    min-height:100vh;
+    color:var(--text);
+    padding-bottom:env(safe-area-inset-bottom);
+  }
+  header{
+    padding:calc(env(safe-area-inset-top) + 16px) 16px 14px;
+    color:#fff;
+    text-align:center;
+  }
+  header h1{
+    margin:0 0 4px;
+    font-size:1.4rem;
+    font-weight:700;
+  }
+  header .sub{
+    font-size:0.9rem;
+    opacity:0.85;
+  }
+  .shiftbar{
+    display:flex;
+    gap:8px;
+    justify-content:center;
+    padding:10px 16px 4px;
+    flex-wrap:wrap;
+  }
+  .shiftbtn{
+    border:none;
+    border-radius:999px;
+    padding:8px 14px;
+    font-size:0.85rem;
+    font-weight:600;
+    background:rgba(255,255,255,0.15);
+    color:#fff;
+    cursor:pointer;
+  }
+  .shiftbtn.active{
+    background:#fff;
+    color:var(--accent);
+  }
+  .datebar{
+    text-align:center;
+    color:#fff;
+    font-size:0.85rem;
+    opacity:0.85;
+    padding-bottom:8px;
+  }
+  main{
+    max-width:640px;
+    margin:0 auto;
+    padding:10px 12px 24px;
+  }
+  .hourcard{
+    background:var(--card);
+    border:1px solid var(--card-border);
+    border-radius:var(--radius);
+    padding:12px 14px;
+    margin-bottom:10px;
+    box-shadow:0 1px 3px rgba(0,0,0,0.08);
+  }
+  .hourcard.current{
+    border:2px solid var(--accent2);
+    box-shadow:0 2px 10px rgba(10,74,120,0.25);
+  }
+  .hourcard-top{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    margin-bottom:8px;
+  }
+  .hourlabel{
+    font-weight:700;
+    font-size:1rem;
+    color:var(--accent);
+  }
+  .hourlabel small{
+    display:block;
+    font-weight:400;
+    font-size:0.72rem;
+    color:var(--muted);
+  }
+  .nowbadge{
+    background:var(--accent2);
+    color:#fff;
+    font-size:0.68rem;
+    font-weight:700;
+    padding:2px 8px;
+    border-radius:999px;
+    letter-spacing:0.03em;
+  }
+  textarea{
+    width:100%;
+    min-height:52px;
+    resize:vertical;
+    border:1px solid var(--card-border);
+    border-radius:10px;
+    padding:8px 10px;
+    font-size:0.95rem;
+    font-family:inherit;
+    color:var(--text);
+    background:#f7fafc;
+  }
+  textarea:focus{
+    outline:2px solid var(--accent2);
+    background:#fff;
+  }
+  .hourcard-actions{
+    display:flex;
+    gap:8px;
+    margin-top:8px;
+    flex-wrap:wrap;
+  }
+  .minibtn{
+    border:1px solid var(--card-border);
+    background:#fff;
+    color:var(--accent);
+    border-radius:8px;
+    padding:6px 10px;
+    font-size:0.78rem;
+    font-weight:600;
+    cursor:pointer;
+  }
+  .minibtn:active{
+    background:#eef4f8;
+  }
+  .minibtn:disabled{
+    opacity:0.35;
+    cursor:default;
+  }
+  .footerbar{
+    max-width:640px;
+    margin:14px auto 0;
+    padding:0 12px;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  .bigbtn{
+    border:none;
+    border-radius:12px;
+    padding:14px;
+    font-size:1rem;
+    font-weight:700;
+    cursor:pointer;
+    color:#fff;
+    background:var(--ok);
+  }
+  .bigbtn.secondary{
+    background:rgba(255,255,255,0.15);
+    color:#fff;
+    border:1px solid rgba(255,255,255,0.4);
+  }
+  .toast{
+    position:fixed;
+    left:50%;
+    bottom:calc(env(safe-area-inset-bottom) + 18px);
+    transform:translateX(-50%) translateY(20px);
+    background:#0f2a3d;
+    color:#fff;
+    padding:10px 18px;
+    border-radius:999px;
+    font-size:0.85rem;
+    opacity:0;
+    pointer-events:none;
+    transition:opacity 0.25s ease, transform 0.25s ease;
+    z-index:50;
+    white-space:nowrap;
+  }
+  .toast.show{
+    opacity:1;
+    transform:translateX(-50%) translateY(0);
+  }
+  .previewbox{
+    background:#fff;
+    border-radius:var(--radius);
+    border:1px solid var(--card-border);
+    padding:12px 14px;
+    margin-top:4px;
+    font-size:0.85rem;
+    color:var(--text);
+    white-space:pre-wrap;
+    max-height:220px;
+    overflow-y:auto;
+    display:none;
+  }
+  .previewbox.show{display:block;}
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Wachtboek</h1>
+  <div class="sub" id="shiftInfo">—</div>
+</header>
+
+<div class="shiftbar" id="shiftBar"></div>
+<div class="datebar" id="dateBar"></div>
+
+<main id="hourList"></main>
+
+<div class="footerbar">
+  <button class="bigbtn secondary" id="togglePreview">Toon volledige tekst</button>
+  <div class="previewbox" id="previewBox"></div>
+  <button class="bigbtn" id="copyAll">Kopieer volledig wachtboek</button>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const DEFAULT_TEXT = "Geen bijzonderheden";
+const SHIFTS = {
+  ochtend: { label: "Ochtend", startHour: 6, endHour: 14 },
+  middag:  { label: "Middag",  startHour: 14, endHour: 22 },
+  nacht:   { label: "Nacht",   startHour: 22, endHour: 6 }
+};
+
+let state = {
+  shiftKey: null,
+  dateKey: null,   // key used for storage, based on shift start date
+  hours: []        // array of {hour, text}
+};
+
+function pad2(n){ return String(n).padStart(2,'0'); }
+
+function detectShift(now){
+  const h = now.getHours();
+  if (h >= 6 && h < 14) return 'ochtend';
+  if (h >= 14 && h < 22) return 'middag';
+  return 'nacht';
+}
+
+function shiftStartDate(now, shiftKey){
+  // returns the calendar date the shift STARTED on (for nacht that spans midnight,
+  // if current time is 0-6, the shift started the previous day)
+  const d = new Date(now);
+  if (shiftKey === 'nacht' && now.getHours() < 6){
+    d.setDate(d.getDate() - 1);
+  }
+  return d;
+}
+
+function dateKeyFor(d){
+  return `${d.getFullYear()}-${pad2(d.getMonth()+1)}-${pad2(d.getDate())}`;
+}
+
+function formatDateNL(d){
+  const days = ['zondag','maandag','dinsdag','woensdag','donderdag','vrijdag','zaterdag'];
+  const months = ['jan','feb','mrt','apr','mei','jun','jul','aug','sep','okt','nov','dec'];
+  return `${days[d.getDay()]} ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()}`;
+}
+
+function buildHourList(shiftKey){
+  const shift = SHIFTS[shiftKey];
+  const hours = [];
+  let h = shift.startHour;
+  for (let i=0;i<8;i++){
+    hours.push(h);
+    h = (h+1) % 24;
+  }
+  return hours;
+}
+
+function storageKey(){
+  return `wachtboek_${state.dateKey}_${state.shiftKey}`;
+}
+
+function loadFromStorage(){
+  try{
+    const raw = localStorage.getItem(storageKey());
+    if (raw){
+      const saved = JSON.parse(raw);
+      if (Array.isArray(saved) && saved.length === state.hours.length){
+        return saved;
+      }
+    }
+  }catch(e){}
+  return null;
+}
+
+function saveToStorage(){
+  try{
+    localStorage.setItem(storageKey(), JSON.stringify(state.hours.map(h=>h.text)));
+  }catch(e){}
+}
+
+function currentHourIndex(now){
+  if (state.shiftDateKeyMatchesNow === false) return -1;
+  const h = now.getHours();
+  const idx = state.hours.findIndex(x => x.hour === h);
+  return idx;
+}
+
+function initShift(shiftKey, opts){
+  opts = opts || {};
+  const now = new Date();
+  const sd = shiftStartDate(now, shiftKey);
+  state.shiftKey = shiftKey;
+  state.dateKey = dateKeyFor(sd);
+  state.startDateObj = sd;
+
+  const hourNums = buildHourList(shiftKey);
+  const savedTexts = null; // computed after hours array set below
+
+  state.hours = hourNums.map(h => ({ hour: h, text: DEFAULT_TEXT }));
+
+  const saved = loadFromStorage();
+  if (saved){
+    state.hours.forEach((h,i)=>{ h.text = saved[i]; });
+  } else if (!opts.silentSave){
+    saveToStorage();
+  }
+
+  render();
+}
+
+function render(){
+  const shift = SHIFTS[state.shiftKey];
+  document.getElementById('shiftInfo').textContent =
+    `${shift.label} (${pad2(shift.startHour)}:00 - ${pad2(shift.endHour)}:00)`;
+  document.getElementById('dateBar').textContent = formatDateNL(state.startDateObj);
+
+  // shift buttons
+  const bar = document.getElementById('shiftBar');
+  bar.innerHTML = '';
+  Object.keys(SHIFTS).forEach(key=>{
+    const btn = document.createElement('button');
+    btn.className = 'shiftbtn' + (key===state.shiftKey ? ' active' : '');
+    btn.textContent = SHIFTS[key].label;
+    btn.onclick = ()=> initShift(key);
+    bar.appendChild(btn);
+  });
+
+  const now = new Date();
+  const curIdx = currentHourIndexForToday(now);
+
+  const list = document.getElementById('hourList');
+  list.innerHTML = '';
+
+  state.hours.forEach((entry, idx)=>{
+    const card = document.createElement('div');
+    card.className = 'hourcard' + (idx===curIdx ? ' current' : '');
+
+    const top = document.createElement('div');
+    top.className = 'hourcard-top';
+
+    const label = document.createElement('div');
+    label.className = 'hourlabel';
+    const endH = (entry.hour+1) % 24;
+    label.innerHTML = `${pad2(entry.hour)}:00 <small>tot ${pad2(endH)}:00</small>`;
+    top.appendChild(label);
+
+    if (idx===curIdx){
+      const badge = document.createElement('span');
+      badge.className = 'nowbadge';
+      badge.textContent = 'NU';
+      top.appendChild(badge);
+    }
+    card.appendChild(top);
+
+    const ta = document.createElement('textarea');
+    ta.value = entry.text;
+    ta.rows = 2;
+    ta.addEventListener('input', ()=>{
+      entry.text = ta.value;
+      saveToStorage();
+    });
+    card.appendChild(ta);
+
+    const actions = document.createElement('div');
+    actions.className = 'hourcard-actions';
+
+    const copyPrevBtn = document.createElement('button');
+    copyPrevBtn.className = 'minibtn';
+    copyPrevBtn.textContent = '↑ Zelfde als vorig uur';
+    copyPrevBtn.disabled = idx===0;
+    copyPrevBtn.onclick = ()=>{
+      if (idx===0) return;
+      entry.text = state.hours[idx-1].text;
+      ta.value = entry.text;
+      saveToStorage();
+      showToast('Overgenomen van vorig uur');
+    };
+    actions.appendChild(copyPrevBtn);
+
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'minibtn';
+    clearBtn.textContent = 'Wis';
+    clearBtn.onclick = ()=>{
+      entry.text = '';
+      ta.value = '';
+      saveToStorage();
+      ta.focus();
+    };
+    actions.appendChild(clearBtn);
+
+    const resetBtn = document.createElement('button');
+    resetBtn.className = 'minibtn';
+    resetBtn.textContent = 'Standaard';
+    resetBtn.onclick = ()=>{
+      entry.text = DEFAULT_TEXT;
+      ta.value = entry.text;
+      saveToStorage();
+    };
+    actions.appendChild(resetBtn);
+
+    card.appendChild(actions);
+    list.appendChild(card);
+  });
+
+  updatePreview();
+}
+
+function currentHourIndexForToday(now){
+  // Determine if "now" falls within this shift's date/hour window, to show the NU badge correctly
+  const shift = SHIFTS[state.shiftKey];
+  const nowDateKey = dateKeyFor(shiftStartDate(now, detectShift(now)));
+  const nowShift = detectShift(now);
+  if (nowShift !== state.shiftKey || nowDateKey !== state.dateKey) return -1;
+  return state.hours.findIndex(h => h.hour === now.getHours());
+}
+
+function buildFullText(){
+  const shift = SHIFTS[state.shiftKey];
+  const lines = [];
+  lines.push(`Wachtboek — ${formatDateNL(state.startDateObj)} — ${shift.label} (${pad2(shift.startHour)}:00-${pad2(shift.endHour)}:00)`);
+  lines.push('');
+  state.hours.forEach(entry=>{
+    const text = entry.text && entry.text.trim() ? entry.text.trim() : DEFAULT_TEXT;
+    lines.push(`${pad2(entry.hour)}:00 - ${text}`);
+  });
+  return lines.join('\n');
+}
+
+function updatePreview(){
+  const box = document.getElementById('previewBox');
+  box.textContent = buildFullText();
+}
+
+let toastTimer = null;
+function showToast(msg){
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=> t.classList.remove('show'), 1800);
+}
+
+async function copyText(text){
+  try{
+    if (navigator.clipboard && navigator.clipboard.writeText){
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  }catch(e){}
+  // fallback
+  try{
+    const ta = document.createElement('textarea');
+    ta.value = text;
+    ta.style.position = 'fixed';
+    ta.style.opacity = '0';
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    return true;
+  }catch(e){
+    return false;
+  }
+}
+
+document.getElementById('togglePreview').addEventListener('click', ()=>{
+  const box = document.getElementById('previewBox');
+  updatePreview();
+  box.classList.toggle('show');
+  document.getElementById('togglePreview').textContent =
+    box.classList.contains('show') ? 'Verberg volledige tekst' : 'Toon volledige tekst';
+});
+
+document.getElementById('copyAll').addEventListener('click', async ()=>{
+  const text = buildFullText();
+  const ok = await copyText(text);
+  showToast(ok ? 'Volledig wachtboek gekopieerd!' : 'Kopiëren mislukt — selecteer handmatig');
+  const box = document.getElementById('previewBox');
+  if (!box.classList.contains('show')){
+    box.classList.add('show');
+    document.getElementById('togglePreview').textContent = 'Verberg volledige tekst';
+  }
+});
+
+// init
+(function(){
+  const now = new Date();
+  initShift(detectShift(now));
+  // refresh NU-badge + auto-switch shift each minute
+  setInterval(()=>{
+    const n = new Date();
+    const detected = detectShift(n);
+    const detectedDateKey = dateKeyFor(shiftStartDate(n, detected));
+    // only auto-switch if user hasn't manually navigated away AND a new shift truly started
+    if (detected !== state.shiftKey || detectedDateKey !== state.dateKey){
+      // don't force-switch away from a shift the user is actively editing unless
+      // we've moved into a completely new shift window
+      const stillSameWindow = (detected === state.shiftKey && detectedDateKey === state.dateKey);
+      if (!stillSameWindow){
+        // Only auto-advance, never auto-jump backward; simplest: just re-render badge state
+        render();
+      }
+    } else {
+      render();
+    }
+  }, 30000);
+})();
+
+if ('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('./sw.js').catch(()=>{});
+  });
+}
+</script>
+</body>
+</html>
