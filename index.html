@@ -430,6 +430,17 @@ function render(){
     };
     actions.appendChild(copyPrevBtn);
 
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'minibtn';
+    clearBtn.textContent = 'Wis';
+    clearBtn.onclick = ()=>{
+      entry.text = '';
+      ta.value = '';
+      saveToStorage();
+      ta.focus();
+    };
+    actions.appendChild(clearBtn);
+
     card.appendChild(actions);
     list.appendChild(card);
   });
@@ -447,10 +458,7 @@ function currentHourIndexForToday(now){
 }
 
 function buildFullText(){
-  const shift = SHIFTS[state.shiftKey];
   const lines = [];
-  lines.push(`Wachtboek — ${formatDateNL(state.startDateObj)} — ${shift.label} (${pad2(shift.startHour)}:00-${pad2(shift.endHour)}:00)`);
-  lines.push('');
   state.hours.forEach(entry=>{
     const text = entry.text && entry.text.trim() ? entry.text.trim() : DEFAULT_TEXT;
     lines.push(`${pad2(entry.hour)}:00 - ${text}`);
