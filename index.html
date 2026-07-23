@@ -375,8 +375,7 @@ function render(){
 
     const label = document.createElement('div');
     label.className = 'hourlabel';
-    const endH = (entry.hour+1) % 24;
-    label.innerHTML = `${pad2(entry.hour)}:00 <small>tot ${pad2(endH)}:00</small>`;
+    label.textContent = `${pad2(entry.hour)}:00`;
     top.appendChild(label);
 
     if (idx===curIdx){
@@ -390,6 +389,25 @@ function render(){
     const ta = document.createElement('textarea');
     ta.value = entry.text;
     ta.rows = 2;
+    // Wis "Geen bijzonderheden" zodra je begint te typen (of plakt)
+    ta.addEventListener('beforeinput', (e)=>{
+      if (ta.value !== DEFAULT_TEXT) return;
+      if (!e.inputType || e.inputType.indexOf('insert') !== 0) return;
+      let inserted = e.data;
+      if (inserted == null && e.dataTransfer) inserted = e.dataTransfer.getData('text');
+      if (inserted != null){
+        e.preventDefault();
+        ta.value = inserted;
+        entry.text = ta.value;
+        saveToStorage();
+        const p = ta.value.length;
+        ta.setSelectionRange(p, p);
+      } else {
+        // Geen tekstdata beschikbaar (bv. dicteren): veld eerst leegmaken
+        ta.value = '';
+        entry.text = '';
+      }
+    });
     ta.addEventListener('input', ()=>{
       entry.text = ta.value;
       saveToStorage();
@@ -411,27 +429,6 @@ function render(){
       showToast('Overgenomen van vorig uur');
     };
     actions.appendChild(copyPrevBtn);
-
-    const clearBtn = document.createElement('button');
-    clearBtn.className = 'minibtn';
-    clearBtn.textContent = 'Wis';
-    clearBtn.onclick = ()=>{
-      entry.text = '';
-      ta.value = '';
-      saveToStorage();
-      ta.focus();
-    };
-    actions.appendChild(clearBtn);
-
-    const resetBtn = document.createElement('button');
-    resetBtn.className = 'minibtn';
-    resetBtn.textContent = 'Standaard';
-    resetBtn.onclick = ()=>{
-      entry.text = DEFAULT_TEXT;
-      ta.value = entry.text;
-      saveToStorage();
-    };
-    actions.appendChild(resetBtn);
 
     card.appendChild(actions);
     list.appendChild(card);
