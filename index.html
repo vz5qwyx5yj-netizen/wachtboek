@@ -180,6 +180,9 @@
     color:#fff;
     border:1px solid rgba(255,255,255,0.4);
   }
+  .bigbtn.danger{
+    background:var(--danger);
+  }
   .toast{
     position:fixed;
     left:50%;
@@ -357,6 +360,7 @@
     <button class="bigbtn secondary" id="toggleMeldingPreview">Toon volledige melding</button>
     <div class="previewbox" id="meldingPreviewBox"></div>
     <button class="bigbtn" id="copyMelding">Kopieer melding</button>
+    <button class="bigbtn danger" id="clearMelding">Hele melding wissen</button>
   </div>
 </div>
 
@@ -871,6 +875,15 @@ document.getElementById('copyMelding').addEventListener('click', async ()=>{
     box.classList.add('show');
     document.getElementById('toggleMeldingPreview').textContent = 'Verberg volledige melding';
   }
+});
+
+document.getElementById('clearMelding').addEventListener('click', ()=>{
+  if (!confirm('Hele melding wissen? Alle velden worden leeggemaakt.')) return;
+  melding = {};
+  saveMelding();
+  renderMelding();
+  updateMeldingPreview();
+  showToast('Melding gewist');
 });
 
 // init
