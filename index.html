@@ -389,23 +389,22 @@ function render(){
     const ta = document.createElement('textarea');
     ta.value = entry.text;
     ta.rows = 2;
-    // Wis "Geen bijzonderheden" zodra je begint te typen (of plakt)
-    ta.addEventListener('beforeinput', (e)=>{
-      if (ta.value !== DEFAULT_TEXT) return;
-      if (!e.inputType || e.inputType.indexOf('insert') !== 0) return;
-      let inserted = e.data;
-      if (inserted == null && e.dataTransfer) inserted = e.dataTransfer.getData('text');
-      if (inserted != null){
-        e.preventDefault();
-        ta.value = inserted;
-        entry.text = ta.value;
-        saveToStorage();
-        const p = ta.value.length;
-        ta.setSelectionRange(p, p);
-      } else {
-        // Geen tekstdata beschikbaar (bv. dicteren): veld eerst leegmaken
+    // Wis "Geen bijzonderheden" zodra je het veld aantikt, zodat je meteen kunt typen.
+    // (Betrouwbaarder op mobiel dan ingrijpen tijdens het typen: Enter en autocorrect
+    //  wisten anders per ongeluk het hele veld.)
+    ta.addEventListener('focus', ()=>{
+      if (ta.value === DEFAULT_TEXT){
         ta.value = '';
         entry.text = '';
+        saveToStorage();
+      }
+    });
+    // Verlaat je het veld leeg, dan komt "Geen bijzonderheden" vanzelf terug.
+    ta.addEventListener('blur', ()=>{
+      if (ta.value.trim() === ''){
+        ta.value = DEFAULT_TEXT;
+        entry.text = DEFAULT_TEXT;
+        saveToStorage();
       }
     });
     ta.addEventListener('input', ()=>{
