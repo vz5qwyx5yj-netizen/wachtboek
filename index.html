@@ -214,6 +214,84 @@
     display:none;
   }
   .previewbox.show{display:block;}
+  /* Herinnering-balk + aan/uit-schakelaar */
+  .reminderbar{
+    display:none;
+    align-items:center;
+    gap:10px;
+    max-width:640px;
+    margin:8px auto 0;
+    padding:10px 12px;
+    background:#fff;
+    border:1px solid var(--card-border);
+    border-radius:12px;
+    box-shadow:0 2px 8px rgba(10,74,120,0.2);
+  }
+  .reminderbar.show{display:flex;}
+  .reminder-text{
+    flex:1;
+    font-size:0.82rem;
+    color:var(--text);
+    line-height:1.3;
+  }
+  .reminder-add{
+    flex:0 0 auto;
+    background:var(--ok);
+    color:#fff;
+    text-decoration:none;
+    font-weight:700;
+    font-size:0.8rem;
+    padding:8px 12px;
+    border-radius:8px;
+    white-space:nowrap;
+  }
+  .reminder-dismiss{
+    flex:0 0 auto;
+    border:none;
+    background:transparent;
+    color:var(--muted);
+    font-size:1.05rem;
+    line-height:1;
+    cursor:pointer;
+    padding:4px 6px;
+  }
+  .reminder-toggle{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    background:rgba(255,255,255,0.12);
+    color:#fff;
+    border:1px solid rgba(255,255,255,0.25);
+    border-radius:12px;
+    padding:12px 14px;
+    font-size:0.88rem;
+    cursor:pointer;
+    user-select:none;
+  }
+  .reminder-toggle input{display:none;}
+  .reminder-toggle .switch{
+    position:relative;
+    width:46px;
+    height:28px;
+    border-radius:999px;
+    background:rgba(255,255,255,0.3);
+    flex:0 0 auto;
+    transition:background 0.2s;
+  }
+  .reminder-toggle .switch::after{
+    content:"";
+    position:absolute;
+    top:3px;
+    left:3px;
+    width:22px;
+    height:22px;
+    border-radius:50%;
+    background:#fff;
+    transition:transform 0.2s;
+  }
+  .reminder-toggle input:checked + .switch{background:var(--ok);}
+  .reminder-toggle input:checked + .switch::after{transform:translateX(18px);}
 </style>
 </head>
 <body>
@@ -226,9 +304,20 @@
 <div class="shiftbar" id="shiftBar"></div>
 <div class="datebar" id="dateBar"></div>
 
+<div class="reminderbar" id="reminderBar">
+  <span class="reminder-text" id="reminderText"></span>
+  <a class="reminder-add" id="reminderAdd" download="wachtboek-herinnering.ics">📅 In agenda</a>
+  <button class="reminder-dismiss" id="reminderDismiss" aria-label="Sluiten">✕</button>
+</div>
+
 <main id="hourList"></main>
 
 <div class="footerbar">
+  <label class="reminder-toggle">
+    <span>🔔 Herinnering 30 min voor einde dienst</span>
+    <input type="checkbox" id="reminderEnabled">
+    <span class="switch"></span>
+  </label>
   <button class="bigbtn secondary" id="togglePreview">Toon volledige tekst</button>
   <div class="previewbox" id="previewBox"></div>
   <button class="bigbtn" id="copyAll">Kopieer volledig wachtboek</button>
@@ -410,6 +499,7 @@ function render(){
     ta.addEventListener('input', ()=>{
       entry.text = ta.value;
       saveToStorage();
+      updateReminderBar();
     });
     card.appendChild(ta);
 
@@ -425,6 +515,7 @@ function render(){
       entry.text = state.hours[idx-1].text;
       ta.value = entry.text;
       saveToStorage();
+      updateReminderBar();
       showToast('Overgenomen van vorig uur');
     };
     actions.appendChild(copyPrevBtn);
@@ -436,6 +527,7 @@ function render(){
       entry.text = '';
       ta.value = '';
       saveToStorage();
+      updateReminderBar();
       ta.focus();
     };
     actions.appendChild(clearBtn);
@@ -447,6 +539,7 @@ function render(){
       entry.text = DEFAULT_TEXT;
       ta.value = DEFAULT_TEXT;
       saveToStorage();
+      updateReminderBar();
       showToast('Geen bijzonderheden');
     };
     actions.appendChild(gbBtn);
@@ -456,6 +549,7 @@ function render(){
   });
 
   updatePreview();
+  updateReminderBar();
 }
 
 function currentHourIndexForToday(now){
@@ -479,6 +573,79 @@ function buildFullText(){
 function updatePreview(){
   const box = document.getElementById('previewBox');
   box.textContent = buildFullText();
+}
+
+// ---- Herinnering (agenda-afspraak 30 min voor einde dienst) ----
+function shiftEndDate(){
+  const shift = SHIFTS[state.shiftKey];
+  const end = new Date(state.startDateObj);
+  end.setHours(shift.endHour, 0, 0, 0);
+  if (shift.endHour <= shift.startHour) end.setDate(end.getDate() + 1);
+  return end;
+}
+function icsTimeLocal(d){
+  return `${d.getFullYear()}${pad2(d.getMonth()+1)}${pad2(d.getDate())}T${pad2(d.getHours())}${pad2(d.getMinutes())}00`;
+}
+function icsTimeUTC(d){
+  return `${d.getUTCFullYear()}${pad2(d.getUTCMonth()+1)}${pad2(d.getUTCDate())}T${pad2(d.getUTCHours())}${pad2(d.getUTCMinutes())}${pad2(d.getUTCSeconds())}Z`;
+}
+function buildICS(){
+  const end = shiftEndDate();
+  const shift = SHIFTS[state.shiftKey];
+  const uid = `wachtboek-${state.dateKey}-${state.shiftKey}@wachtboek`;
+  return [
+    'BEGIN:VCALENDAR',
+    'VERSION:2.0',
+    'PRODID:-//Wachtboek//NL',
+    'CALSCALE:GREGORIAN',
+    'BEGIN:VEVENT',
+    `UID:${uid}`,
+    `DTSTAMP:${icsTimeUTC(new Date())}`,
+    `DTSTART:${icsTimeLocal(end)}`,
+    `DTEND:${icsTimeLocal(end)}`,
+    `SUMMARY:Wachtboek invullen (einde ${shift.label.toLowerCase()}dienst)`,
+    'DESCRIPTION:Vul je wachtboek in voor het einde van je dienst.',
+    'BEGIN:VALARM',
+    'ACTION:DISPLAY',
+    'DESCRIPTION:Wachtboek invullen',
+    'TRIGGER:-PT30M',
+    'END:VALARM',
+    'END:VEVENT',
+    'END:VCALENDAR'
+  ].join('\r\n');
+}
+function reminderEnabled(){
+  return localStorage.getItem('wachtboek_reminder_enabled') !== '0'; // standaard aan
+}
+function reminderDismissKey(){
+  return `wachtboek_reminderdismissed_${state.dateKey}_${state.shiftKey}`;
+}
+function shiftHasContent(){
+  return state.hours.some(h => {
+    const t = (h.text || '').trim();
+    return t && t !== DEFAULT_TEXT;
+  });
+}
+function reminderTimeLabel(){
+  const r = new Date(shiftEndDate().getTime() - 30*60000);
+  return `${pad2(r.getHours())}:${pad2(r.getMinutes())}`;
+}
+let reminderUrl = null;
+function updateReminderBar(){
+  const bar = document.getElementById('reminderBar');
+  const show = reminderEnabled()
+            && shiftHasContent()
+            && localStorage.getItem(reminderDismissKey()) !== '1';
+  if (!show){
+    bar.classList.remove('show');
+    return;
+  }
+  if (reminderUrl){ URL.revokeObjectURL(reminderUrl); reminderUrl = null; }
+  reminderUrl = URL.createObjectURL(new Blob([buildICS()], {type:'text/calendar'}));
+  document.getElementById('reminderAdd').href = reminderUrl;
+  document.getElementById('reminderText').textContent =
+    `Herinnering om ${reminderTimeLabel()} (30 min voor einde dienst)?`;
+  bar.classList.add('show');
 }
 
 let toastTimer = null;
@@ -532,6 +699,26 @@ document.getElementById('copyAll').addEventListener('click', async ()=>{
     document.getElementById('togglePreview').textContent = 'Verberg volledige tekst';
   }
 });
+
+// Herinnering: wegtikken, in agenda zetten, aan/uit
+document.getElementById('reminderDismiss').addEventListener('click', ()=>{
+  localStorage.setItem(reminderDismissKey(), '1');
+  document.getElementById('reminderBar').classList.remove('show');
+});
+document.getElementById('reminderAdd').addEventListener('click', ()=>{
+  localStorage.setItem(reminderDismissKey(), '1');
+  showToast('Zet de afspraak in je agenda');
+  setTimeout(()=> document.getElementById('reminderBar').classList.remove('show'), 400);
+});
+(function(){
+  const chk = document.getElementById('reminderEnabled');
+  chk.checked = reminderEnabled();
+  chk.addEventListener('change', ()=>{
+    localStorage.setItem('wachtboek_reminder_enabled', chk.checked ? '1' : '0');
+    updateReminderBar();
+    showToast(chk.checked ? 'Herinnering staat aan' : 'Herinnering staat uit');
+  });
+})();
 
 // init
 (function(){

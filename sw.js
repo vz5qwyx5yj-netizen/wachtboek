@@ -1,6 +1,6 @@
 // Service worker voor Wachtboek
 // CACHE wordt automatisch ververst bij elke upload (upload.command bumpt dit getal).
-const CACHE = 'wachtboek-v20260820202710';
+const CACHE = 'wachtboek-v20260820204236';
 const CORE = [
   './',
   './index.html',
