@@ -299,6 +299,8 @@
   .topnav{
     display:flex;
     justify-content:center;
+    gap:8px;
+    flex-wrap:wrap;
     padding:10px 16px 0;
   }
   .navbtn{
@@ -312,6 +314,48 @@
     cursor:pointer;
   }
   .navbtn:active{background:rgba(255,255,255,0.28);}
+  /* Geschiedenis-lijst + detailscherm */
+  .history-item{
+    display:block;
+    width:100%;
+    text-align:left;
+    background:var(--card);
+    border:1px solid var(--card-border);
+    border-radius:var(--radius);
+    padding:12px 14px;
+    margin-bottom:10px;
+    box-shadow:0 1px 3px rgba(0,0,0,0.08);
+    cursor:pointer;
+    font-family:inherit;
+  }
+  .history-item:active{background:#eef4f8;}
+  .history-item-title{
+    font-weight:700;
+    font-size:0.95rem;
+    color:var(--accent);
+    margin-bottom:2px;
+  }
+  .history-item-sub{
+    font-size:0.82rem;
+    color:var(--muted);
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+  }
+  .history-empty{
+    color:#fff;
+    opacity:0.85;
+    text-align:center;
+    padding:24px 12px;
+    font-size:0.9rem;
+    line-height:1.4;
+  }
+  .detailtext{
+    white-space:pre-wrap;
+    font-size:0.95rem;
+    color:var(--text);
+    line-height:1.4;
+  }
 </style>
 </head>
 <body>
@@ -324,6 +368,7 @@
 <div id="viewWachtboek">
   <div class="topnav">
     <button class="navbtn" id="openMelding">📋 Melding maken</button>
+    <button class="navbtn" id="openWbHistory">📚 Geschiedenis</button>
   </div>
 
   <div class="shiftbar" id="shiftBar"></div>
@@ -351,7 +396,8 @@
 
 <div id="viewMelding" style="display:none">
   <div class="topnav">
-    <button class="navbtn" id="backToWachtboek">← Terug naar wachtboek</button>
+    <button class="navbtn" id="backToWachtboek">← Wachtboek</button>
+    <button class="navbtn" id="openMeldingHist">📚 Laatste meldingen</button>
   </div>
 
   <main id="meldingList"></main>
@@ -361,6 +407,25 @@
     <div class="previewbox" id="meldingPreviewBox"></div>
     <button class="bigbtn" id="copyMelding">Kopieer melding</button>
     <button class="bigbtn danger" id="clearMelding">Hele melding wissen</button>
+  </div>
+</div>
+
+<div id="viewHistory" style="display:none">
+  <div class="topnav">
+    <button class="navbtn" id="historyBack">← Terug</button>
+  </div>
+  <main id="historyList"></main>
+</div>
+
+<div id="viewDetail" style="display:none">
+  <div class="topnav">
+    <button class="navbtn" id="detailBack">← Terug</button>
+  </div>
+  <main>
+    <div class="hourcard"><div class="detailtext" id="detailText"></div></div>
+  </main>
+  <div class="footerbar">
+    <button class="bigbtn" id="detailCopy">Kopieer</button>
   </div>
 </div>
 
@@ -755,31 +820,212 @@ function renderMelding(){
   });
 }
 
-function buildMeldingText(){
+function meldingTextFrom(fields){
   return MELDING_FIELDS.map(f=>{
-    const t = (melding[f.key] || '').trim();
+    const t = (fields[f.key] || '').trim();
     return t ? `${f.label}: ${t}` : `${f.label}:`;
   }).join('\n');
 }
+function buildMeldingText(){ return meldingTextFrom(melding); }
 function updateMeldingPreview(){
   const box = document.getElementById('meldingPreviewBox');
   if (box) box.textContent = buildMeldingText();
 }
 
+const VIEW_IDS = ['viewWachtboek','viewMelding','viewHistory','viewDetail'];
 function showView(v){
-  document.getElementById('viewWachtboek').style.display = (v === 'melding') ? 'none' : '';
-  document.getElementById('viewMelding').style.display   = (v === 'melding') ? '' : 'none';
+  const map = { wachtboek:'viewWachtboek', melding:'viewMelding', history:'viewHistory', detail:'viewDetail' };
+  VIEW_IDS.forEach(id => { document.getElementById(id).style.display = 'none'; });
+  document.getElementById(map[v]).style.display = '';
   const sub = document.getElementById('shiftInfo');
-  if (v === 'melding'){
+  if (v === 'wachtboek'){
+    document.getElementById('appTitle').textContent = 'Wachtboek';
+    sub.style.display = '';
+    render();
+  } else if (v === 'melding'){
     document.getElementById('appTitle').textContent = 'Melding maken';
     sub.style.display = 'none';
     renderMelding();
     updateMeldingPreview();
   } else {
-    document.getElementById('appTitle').textContent = 'Wachtboek';
-    sub.style.display = '';
-    render();
+    sub.style.display = 'none';
+    // titel wordt door de opener gezet (geschiedenis / detail)
   }
+}
+
+// ---- Detailscherm (alleen-lezen terugzien + kopiëren) ----
+let detailCopyText = '';
+function openDetail(title, text, backFn){
+  showView('detail');
+  document.getElementById('appTitle').textContent = title;
+  document.getElementById('detailText').textContent = text;
+  detailCopyText = text;
+  document.getElementById('detailBack').onclick = backFn;
+}
+
+// ---- Wachtboek-geschiedenis (laatste 30 dagen) ----
+const SHIFT_ORDER = { ochtend:0, middag:1, nacht:2 };
+const WB_KEY_RE = /^wachtboek_(\d{4}-\d{2}-\d{2})_(ochtend|middag|nacht)$/;
+
+function parseDateKey(key){
+  const [y,m,d] = key.split('-').map(Number);
+  return new Date(y, m-1, d);
+}
+function cutoff30(){
+  const c = new Date();
+  c.setHours(0,0,0,0);
+  c.setDate(c.getDate() - 30);
+  return c;
+}
+function pruneOldWachtboek(){
+  const cutoff = cutoff30();
+  const remove = [];
+  for (let i=0;i<localStorage.length;i++){
+    const key = localStorage.key(i);
+    const m = key && key.match(WB_KEY_RE);
+    if (m && parseDateKey(m[1]) < cutoff) remove.push(key);
+  }
+  remove.forEach(k => localStorage.removeItem(k));
+}
+function wachtboekTextFrom(shiftKey, texts){
+  return buildHourList(shiftKey).map((h,i)=>{
+    const raw = texts[i];
+    const text = raw && raw.trim() ? raw.trim() : DEFAULT_TEXT;
+    return `${pad2(h)}:00 - ${text}`;
+  }).join('\n');
+}
+function shortSummary(texts){
+  for (const t of texts){
+    const s = (t || '').trim();
+    if (s && s !== DEFAULT_TEXT) return s.length > 40 ? s.slice(0,40) + '…' : s;
+  }
+  return '';
+}
+function wachtboekHistoryEntries(){
+  const cutoff = cutoff30();
+  const entries = [];
+  for (let i=0;i<localStorage.length;i++){
+    const key = localStorage.key(i);
+    const m = key && key.match(WB_KEY_RE);
+    if (!m) continue;
+    const d = parseDateKey(m[1]);
+    if (d < cutoff) continue;
+    let texts;
+    try{ texts = JSON.parse(localStorage.getItem(key)); }catch(e){ continue; }
+    if (!Array.isArray(texts)) continue;
+    if (!texts.some(t => t && t.trim() && t.trim() !== DEFAULT_TEXT)) continue;
+    entries.push({ date:d, shiftKey:m[2], texts });
+  }
+  entries.sort((a,b)=> (b.date - a.date) || (SHIFT_ORDER[a.shiftKey] - SHIFT_ORDER[b.shiftKey]));
+  return entries;
+}
+function renderWachtboekHistory(){
+  const list = document.getElementById('historyList');
+  list.innerHTML = '';
+  const entries = wachtboekHistoryEntries();
+  if (!entries.length){
+    const empty = document.createElement('div');
+    empty.className = 'history-empty';
+    empty.textContent = 'Nog geen ingevulde wachtboeken in de laatste 30 dagen.';
+    list.appendChild(empty);
+    return;
+  }
+  entries.forEach(e=>{
+    const item = document.createElement('button');
+    item.className = 'history-item';
+    const title = document.createElement('div');
+    title.className = 'history-item-title';
+    title.textContent = formatDateNL(e.date);
+    const sub = document.createElement('div');
+    sub.className = 'history-item-sub';
+    sub.textContent = SHIFTS[e.shiftKey].label + ' · ' + (shortSummary(e.texts) || 'ingevuld');
+    item.appendChild(title);
+    item.appendChild(sub);
+    item.onclick = ()=> openDetail(
+      `${formatDateNL(e.date)} — ${SHIFTS[e.shiftKey].label}`,
+      wachtboekTextFrom(e.shiftKey, e.texts),
+      openWachtboekHistory
+    );
+    list.appendChild(item);
+  });
+}
+function openWachtboekHistory(){
+  showView('history');
+  document.getElementById('appTitle').textContent = 'Geschiedenis';
+  document.getElementById('historyBack').onclick = ()=> showView('wachtboek');
+  renderWachtboekHistory();
+}
+
+// ---- Meldingen-geschiedenis (laatste 5) ----
+function loadMeldingHistory(){
+  try{ const a = JSON.parse(localStorage.getItem('wachtboek_meldingen')); if (Array.isArray(a)) return a; }catch(e){}
+  return [];
+}
+function saveMeldingHistory(arr){
+  try{ localStorage.setItem('wachtboek_meldingen', JSON.stringify(arr)); }catch(e){}
+}
+function meldingHasContent(obj){
+  return MELDING_FIELDS.some(f => (obj[f.key] || '').trim());
+}
+function pushMeldingToHistory(){
+  if (!meldingHasContent(melding)) return;
+  const arr = loadMeldingHistory();
+  const snapshot = {};
+  MELDING_FIELDS.forEach(f => { snapshot[f.key] = melding[f.key] || ''; });
+  if (arr.length){
+    const last = arr[0].fields || {};
+    if (MELDING_FIELDS.every(f => (last[f.key] || '') === snapshot[f.key])) return;
+  }
+  arr.unshift({ ts: Date.now(), fields: snapshot });
+  while (arr.length > 5) arr.pop();
+  saveMeldingHistory(arr);
+}
+function meldingDateLabel(d){
+  return `${formatDateNL(d)} ${pad2(d.getHours())}:${pad2(d.getMinutes())}`;
+}
+function meldingSummary(fields){
+  for (const key of ['wat','wie','waar','welke','hoe','wanneer']){
+    const s = (fields[key] || '').trim();
+    if (s) return s.length > 45 ? s.slice(0,45) + '…' : s;
+  }
+  return '(leeg)';
+}
+function renderMeldingHistory(){
+  const list = document.getElementById('historyList');
+  list.innerHTML = '';
+  const arr = loadMeldingHistory();
+  if (!arr.length){
+    const empty = document.createElement('div');
+    empty.className = 'history-empty';
+    empty.textContent = 'Nog geen bewaarde meldingen.\nEen melding wordt bewaard zodra je op "Kopieer melding" tikt.';
+    list.appendChild(empty);
+    return;
+  }
+  arr.forEach(entry=>{
+    const d = new Date(entry.ts);
+    const item = document.createElement('button');
+    item.className = 'history-item';
+    const title = document.createElement('div');
+    title.className = 'history-item-title';
+    title.textContent = meldingDateLabel(d);
+    const sub = document.createElement('div');
+    sub.className = 'history-item-sub';
+    sub.textContent = meldingSummary(entry.fields);
+    item.appendChild(title);
+    item.appendChild(sub);
+    item.onclick = ()=> openDetail(
+      meldingDateLabel(d),
+      meldingTextFrom(entry.fields),
+      openMeldingHistory
+    );
+    list.appendChild(item);
+  });
+}
+function openMeldingHistory(){
+  showView('history');
+  document.getElementById('appTitle').textContent = 'Laatste meldingen';
+  document.getElementById('historyBack').onclick = ()=> showView('melding');
+  renderMeldingHistory();
 }
 
 let toastTimer = null;
@@ -869,6 +1115,7 @@ document.getElementById('toggleMeldingPreview').addEventListener('click', ()=>{
 document.getElementById('copyMelding').addEventListener('click', async ()=>{
   const text = buildMeldingText();
   const ok = await copyText(text);
+  pushMeldingToHistory();
   showToast(ok ? 'Melding gekopieerd!' : 'Kopiëren mislukt — selecteer handmatig');
   const box = document.getElementById('meldingPreviewBox');
   if (!box.classList.contains('show')){
@@ -886,9 +1133,18 @@ document.getElementById('clearMelding').addEventListener('click', ()=>{
   showToast('Melding gewist');
 });
 
+// Geschiedenis openen + kopiëren vanuit detailscherm
+document.getElementById('openWbHistory').addEventListener('click', openWachtboekHistory);
+document.getElementById('openMeldingHist').addEventListener('click', openMeldingHistory);
+document.getElementById('detailCopy').addEventListener('click', async ()=>{
+  const ok = await copyText(detailCopyText);
+  showToast(ok ? 'Gekopieerd!' : 'Kopiëren mislukt — selecteer handmatig');
+});
+
 // init
 (function(){
   const now = new Date();
+  pruneOldWachtboek();
   melding = loadMelding();
   initShift(detectShift(now));
   // refresh NU-badge + auto-switch shift each minute
