@@ -292,35 +292,72 @@
   }
   .reminder-toggle input:checked + .switch{background:var(--ok);}
   .reminder-toggle input:checked + .switch::after{transform:translateX(18px);}
+  /* Navigatie tussen wachtboek en melding */
+  .topnav{
+    display:flex;
+    justify-content:center;
+    padding:10px 16px 0;
+  }
+  .navbtn{
+    border:1px solid rgba(255,255,255,0.5);
+    background:rgba(255,255,255,0.15);
+    color:#fff;
+    border-radius:999px;
+    padding:9px 18px;
+    font-size:0.9rem;
+    font-weight:600;
+    cursor:pointer;
+  }
+  .navbtn:active{background:rgba(255,255,255,0.28);}
 </style>
 </head>
 <body>
 
 <header>
-  <h1>Wachtboek</h1>
+  <h1 id="appTitle">Wachtboek</h1>
   <div class="sub" id="shiftInfo">—</div>
 </header>
 
-<div class="shiftbar" id="shiftBar"></div>
-<div class="datebar" id="dateBar"></div>
+<div id="viewWachtboek">
+  <div class="topnav">
+    <button class="navbtn" id="openMelding">📋 Melding maken</button>
+  </div>
 
-<div class="reminderbar" id="reminderBar">
-  <span class="reminder-text" id="reminderText"></span>
-  <a class="reminder-add" id="reminderAdd" download="wachtboek-herinnering.ics">📅 In agenda</a>
-  <button class="reminder-dismiss" id="reminderDismiss" aria-label="Sluiten">✕</button>
+  <div class="shiftbar" id="shiftBar"></div>
+  <div class="datebar" id="dateBar"></div>
+
+  <div class="reminderbar" id="reminderBar">
+    <span class="reminder-text" id="reminderText"></span>
+    <a class="reminder-add" id="reminderAdd" download="wachtboek-herinnering.ics">📅 In agenda</a>
+    <button class="reminder-dismiss" id="reminderDismiss" aria-label="Sluiten">✕</button>
+  </div>
+
+  <main id="hourList"></main>
+
+  <div class="footerbar">
+    <label class="reminder-toggle">
+      <span>🔔 Herinnering 30 min voor einde dienst</span>
+      <input type="checkbox" id="reminderEnabled">
+      <span class="switch"></span>
+    </label>
+    <button class="bigbtn secondary" id="togglePreview">Toon volledige tekst</button>
+    <div class="previewbox" id="previewBox"></div>
+    <button class="bigbtn" id="copyAll">Kopieer volledig wachtboek</button>
+  </div>
 </div>
 
-<main id="hourList"></main>
+<div id="viewMelding" style="display:none">
+  <div class="topnav">
+    <button class="navbtn" id="backToWachtboek">← Terug naar wachtboek</button>
+  </div>
 
-<div class="footerbar">
-  <label class="reminder-toggle">
-    <span>🔔 Herinnering 30 min voor einde dienst</span>
-    <input type="checkbox" id="reminderEnabled">
-    <span class="switch"></span>
-  </label>
-  <button class="bigbtn secondary" id="togglePreview">Toon volledige tekst</button>
-  <div class="previewbox" id="previewBox"></div>
-  <button class="bigbtn" id="copyAll">Kopieer volledig wachtboek</button>
+  <main id="meldingList"></main>
+
+  <div class="footerbar">
+    <button class="bigbtn secondary" id="toggleMeldingPreview">Toon volledige melding</button>
+    <div class="previewbox" id="meldingPreviewBox"></div>
+    <button class="bigbtn" id="copyMelding">Kopieer melding</button>
+  </div>
 </div>
 
 <div class="toast" id="toast"></div>
@@ -648,6 +685,99 @@ function updateReminderBar(){
   bar.classList.add('show');
 }
 
+// ---- Melding maken (wie / wat / waar / wanneer / welke / hoe) ----
+const MELDING_FIELDS = [
+  { key:'wie',     label:'Wie' },
+  { key:'wat',     label:'Wat' },
+  { key:'waar',    label:'Waar' },
+  { key:'wanneer', label:'Wanneer' },
+  { key:'welke',   label:'Welke' },
+  { key:'hoe',     label:'Hoe' }
+];
+let melding = {};
+
+function loadMelding(){
+  try{
+    const raw = localStorage.getItem('wachtboek_melding');
+    if (raw){ const o = JSON.parse(raw); if (o && typeof o === 'object') return o; }
+  }catch(e){}
+  return {};
+}
+function saveMelding(){
+  try{ localStorage.setItem('wachtboek_melding', JSON.stringify(melding)); }catch(e){}
+}
+
+function renderMelding(){
+  const list = document.getElementById('meldingList');
+  list.innerHTML = '';
+  MELDING_FIELDS.forEach(f=>{
+    const card = document.createElement('div');
+    card.className = 'hourcard';
+
+    const top = document.createElement('div');
+    top.className = 'hourcard-top';
+    const label = document.createElement('div');
+    label.className = 'hourlabel';
+    label.textContent = f.label;
+    top.appendChild(label);
+    card.appendChild(top);
+
+    const ta = document.createElement('textarea');
+    ta.value = melding[f.key] || '';
+    ta.rows = 2;
+    ta.addEventListener('input', ()=>{
+      melding[f.key] = ta.value;
+      saveMelding();
+      updateMeldingPreview();
+    });
+    card.appendChild(ta);
+
+    const actions = document.createElement('div');
+    actions.className = 'hourcard-actions';
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'minibtn';
+    clearBtn.textContent = 'Wis';
+    clearBtn.onclick = ()=>{
+      melding[f.key] = '';
+      ta.value = '';
+      saveMelding();
+      updateMeldingPreview();
+      ta.focus();
+    };
+    actions.appendChild(clearBtn);
+    card.appendChild(actions);
+
+    list.appendChild(card);
+  });
+}
+
+function buildMeldingText(){
+  return MELDING_FIELDS.map(f=>{
+    const t = (melding[f.key] || '').trim();
+    return t ? `${f.label}: ${t}` : `${f.label}:`;
+  }).join('\n');
+}
+function updateMeldingPreview(){
+  const box = document.getElementById('meldingPreviewBox');
+  if (box) box.textContent = buildMeldingText();
+}
+
+function showView(v){
+  document.getElementById('viewWachtboek').style.display = (v === 'melding') ? 'none' : '';
+  document.getElementById('viewMelding').style.display   = (v === 'melding') ? '' : 'none';
+  const sub = document.getElementById('shiftInfo');
+  if (v === 'melding'){
+    document.getElementById('appTitle').textContent = 'Melding maken';
+    sub.style.display = 'none';
+    renderMelding();
+    updateMeldingPreview();
+  } else {
+    document.getElementById('appTitle').textContent = 'Wachtboek';
+    sub.style.display = '';
+    render();
+  }
+}
+
 let toastTimer = null;
 function showToast(msg){
   const t = document.getElementById('toast');
@@ -720,9 +850,33 @@ document.getElementById('reminderAdd').addEventListener('click', ()=>{
   });
 })();
 
+// Melding: schermen wisselen, voorbeeld tonen, kopiëren
+document.getElementById('openMelding').addEventListener('click', ()=> showView('melding'));
+document.getElementById('backToWachtboek').addEventListener('click', ()=> showView('wachtboek'));
+
+document.getElementById('toggleMeldingPreview').addEventListener('click', ()=>{
+  const box = document.getElementById('meldingPreviewBox');
+  updateMeldingPreview();
+  box.classList.toggle('show');
+  document.getElementById('toggleMeldingPreview').textContent =
+    box.classList.contains('show') ? 'Verberg volledige melding' : 'Toon volledige melding';
+});
+
+document.getElementById('copyMelding').addEventListener('click', async ()=>{
+  const text = buildMeldingText();
+  const ok = await copyText(text);
+  showToast(ok ? 'Melding gekopieerd!' : 'Kopiëren mislukt — selecteer handmatig');
+  const box = document.getElementById('meldingPreviewBox');
+  if (!box.classList.contains('show')){
+    box.classList.add('show');
+    document.getElementById('toggleMeldingPreview').textContent = 'Verberg volledige melding';
+  }
+});
+
 // init
 (function(){
   const now = new Date();
+  melding = loadMelding();
   initShift(detectShift(now));
   // refresh NU-badge + auto-switch shift each minute
   setInterval(()=>{
