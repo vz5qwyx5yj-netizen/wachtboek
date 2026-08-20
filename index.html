@@ -441,6 +441,17 @@ function render(){
     };
     actions.appendChild(clearBtn);
 
+    const gbBtn = document.createElement('button');
+    gbBtn.className = 'minibtn';
+    gbBtn.textContent = 'GB';
+    gbBtn.onclick = ()=>{
+      entry.text = DEFAULT_TEXT;
+      ta.value = DEFAULT_TEXT;
+      saveToStorage();
+      showToast('Geen bijzonderheden');
+    };
+    actions.appendChild(gbBtn);
+
     card.appendChild(actions);
     list.appendChild(card);
   });
