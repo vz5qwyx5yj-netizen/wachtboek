@@ -447,6 +447,9 @@ let state = {
 
 function pad2(n){ return String(n).padStart(2,'0'); }
 
+// Tijdvak van één uur, bv. "11:00 - 12:00"
+function hourRange(h){ return `${pad2(h)}:00 - ${pad2((h+1)%24)}:00`; }
+
 function detectShift(now){
   const h = now.getHours();
   if (h >= 6 && h < 14) return 'ochtend';
@@ -570,7 +573,7 @@ function render(){
 
     const label = document.createElement('div');
     label.className = 'hourlabel';
-    label.textContent = `${pad2(entry.hour)}:00`;
+    label.textContent = hourRange(entry.hour);
     top.appendChild(label);
 
     if (idx===curIdx){
@@ -671,7 +674,7 @@ function buildFullText(){
   const lines = [];
   state.hours.forEach(entry=>{
     const text = entry.text && entry.text.trim() ? entry.text.trim() : DEFAULT_TEXT;
-    lines.push(`${pad2(entry.hour)}:00 - ${text}`);
+    lines.push(`${hourRange(entry.hour)}: ${text}`);
   });
   return lines.join('\n');
 }
@@ -891,7 +894,7 @@ function wachtboekTextFrom(shiftKey, texts){
   return buildHourList(shiftKey).map((h,i)=>{
     const raw = texts[i];
     const text = raw && raw.trim() ? raw.trim() : DEFAULT_TEXT;
-    return `${pad2(h)}:00 - ${text}`;
+    return `${hourRange(h)}: ${text}`;
   }).join('\n');
 }
 function shortSummary(texts){
