@@ -699,7 +699,8 @@ function icsTimeUTC(d){
   return `${d.getUTCFullYear()}${pad2(d.getUTCMonth()+1)}${pad2(d.getUTCDate())}T${pad2(d.getUTCHours())}${pad2(d.getUTCMinutes())}${pad2(d.getUTCSeconds())}Z`;
 }
 function buildICS(){
-  const end = shiftEndDate();
+  const end = shiftEndDate();                            // einde dienst, bv. 14:00
+  const eventEnd = new Date(end.getTime() + 30*60000);   // 14:30 → niet-nul duur (iOS neemt anders soms het alarm niet over)
   const shift = SHIFTS[state.shiftKey];
   const uid = `wachtboek-${state.dateKey}-${state.shiftKey}@wachtboek`;
   return [
@@ -707,17 +708,20 @@ function buildICS(){
     'VERSION:2.0',
     'PRODID:-//Wachtboek//NL',
     'CALSCALE:GREGORIAN',
+    'METHOD:PUBLISH',
     'BEGIN:VEVENT',
     `UID:${uid}`,
     `DTSTAMP:${icsTimeUTC(new Date())}`,
     `DTSTART:${icsTimeLocal(end)}`,
-    `DTEND:${icsTimeLocal(end)}`,
+    `DTEND:${icsTimeLocal(eventEnd)}`,
     `SUMMARY:Wachtboek invullen (einde ${shift.label.toLowerCase()}dienst)`,
     'DESCRIPTION:Vul je wachtboek in voor het einde van je dienst.',
     'BEGIN:VALARM',
     'ACTION:DISPLAY',
     'DESCRIPTION:Wachtboek invullen',
     'TRIGGER:-PT30M',
+    `UID:${uid}-alarm`,
+    `X-WR-ALARMUID:${uid}-alarm`,
     'END:VALARM',
     'END:VEVENT',
     'END:VCALENDAR'
