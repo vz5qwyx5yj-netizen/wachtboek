@@ -157,6 +157,11 @@
     opacity:0.35;
     cursor:default;
   }
+  .minibtn.active{
+    background:var(--ok);
+    color:#fff;
+    border-color:var(--ok);
+  }
   .footerbar{
     max-width:640px;
     margin:14px auto 0;
@@ -771,6 +776,7 @@ const MELDING_FIELDS = [
   { key:'hoe',     label:'Hoe' }
 ];
 let melding = {};
+let meldingKeep = {}; // per veld: blijft de tekst staan bij een nieuwe melding?
 
 function loadMelding(){
   try{
@@ -781,6 +787,13 @@ function loadMelding(){
 }
 function saveMelding(){
   try{ localStorage.setItem('wachtboek_melding', JSON.stringify(melding)); }catch(e){}
+}
+function loadMeldingKeep(){
+  try{ const o = JSON.parse(localStorage.getItem('wachtboek_melding_keep')); if (o && typeof o === 'object') return o; }catch(e){}
+  return {};
+}
+function saveMeldingKeep(){
+  try{ localStorage.setItem('wachtboek_melding_keep', JSON.stringify(meldingKeep)); }catch(e){}
 }
 
 function renderMelding(){
@@ -821,6 +834,19 @@ function renderMelding(){
       ta.focus();
     };
     actions.appendChild(clearBtn);
+
+    const keepBtn = document.createElement('button');
+    keepBtn.className = 'minibtn' + (meldingKeep[f.key] ? ' active' : '');
+    keepBtn.textContent = meldingKeep[f.key] ? '✓ Bewaard' : 'Bewaar';
+    keepBtn.onclick = ()=>{
+      meldingKeep[f.key] = !meldingKeep[f.key];
+      saveMeldingKeep();
+      keepBtn.classList.toggle('active', meldingKeep[f.key]);
+      keepBtn.textContent = meldingKeep[f.key] ? '✓ Bewaard' : 'Bewaar';
+      showToast(meldingKeep[f.key] ? 'Blijft staan voor de volgende melding' : 'Wordt niet meer bewaard');
+    };
+    actions.appendChild(keepBtn);
+
     card.appendChild(actions);
 
     list.appendChild(card);
@@ -1132,8 +1158,8 @@ document.getElementById('copyMelding').addEventListener('click', async ()=>{
 });
 
 document.getElementById('clearMelding').addEventListener('click', ()=>{
-  if (!confirm('Hele melding wissen? Alle velden worden leeggemaakt.')) return;
-  melding = {};
+  if (!confirm('Hele melding wissen? Velden met "Bewaar" aan blijven staan.')) return;
+  MELDING_FIELDS.forEach(f => { if (!meldingKeep[f.key]) melding[f.key] = ''; });
   saveMelding();
   renderMelding();
   updateMeldingPreview();
@@ -1153,6 +1179,7 @@ document.getElementById('detailCopy').addEventListener('click', async ()=>{
   const now = new Date();
   pruneOldWachtboek();
   melding = loadMelding();
+  meldingKeep = loadMeldingKeep();
   initShift(detectShift(now));
   // refresh NU-badge + auto-switch shift each minute
   setInterval(()=>{
