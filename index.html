@@ -666,6 +666,31 @@ function render(){
   updateReminderBar();
 }
 
+// Verplaatst alleen de "NU"-markering naar het juiste uurblok, zonder de
+// tekstvakken opnieuw op te bouwen. Zo raak je nooit je focus/cursor kwijt
+// terwijl je aan het typen bent.
+function refreshNowBadge(){
+  const now = new Date();
+  const curIdx = currentHourIndexForToday(now);
+  const cards = document.getElementById('hourList').children;
+  for (let i=0;i<cards.length;i++){
+    const card = cards[i];
+    const isCur = (i === curIdx);
+    card.classList.toggle('current', isCur);
+    const top = card.querySelector('.hourcard-top');
+    if (!top) continue;
+    let badge = top.querySelector('.nowbadge');
+    if (isCur && !badge){
+      badge = document.createElement('span');
+      badge.className = 'nowbadge';
+      badge.textContent = 'NU';
+      top.appendChild(badge);
+    } else if (!isCur && badge){
+      badge.remove();
+    }
+  }
+}
+
 function currentHourIndexForToday(now){
   // Determine if "now" falls within this shift's date/hour window, to show the NU badge correctly
   const shift = SHIFTS[state.shiftKey];
@@ -1181,23 +1206,12 @@ document.getElementById('detailCopy').addEventListener('click', async ()=>{
   melding = loadMelding();
   meldingKeep = loadMeldingKeep();
   initShift(detectShift(now));
-  // refresh NU-badge + auto-switch shift each minute
+  // Elke 30 sec de NU-markering bijwerken. We bouwen de tekstvakken NIET opnieuw op
+  // (dat wiste je focus tijdens het typen); we verplaatsen alleen de "NU"-badge.
   setInterval(()=>{
-    const n = new Date();
-    const detected = detectShift(n);
-    const detectedDateKey = dateKeyFor(shiftStartDate(n, detected));
-    // only auto-switch if user hasn't manually navigated away AND a new shift truly started
-    if (detected !== state.shiftKey || detectedDateKey !== state.dateKey){
-      // don't force-switch away from a shift the user is actively editing unless
-      // we've moved into a completely new shift window
-      const stillSameWindow = (detected === state.shiftKey && detectedDateKey === state.dateKey);
-      if (!stillSameWindow){
-        // Only auto-advance, never auto-jump backward; simplest: just re-render badge state
-        render();
-      }
-    } else {
-      render();
-    }
+    // Alleen op het wachtboek-scherm iets doen.
+    if (document.getElementById('viewWachtboek').style.display === 'none') return;
+    refreshNowBadge();
   }, 30000);
 })();
 
