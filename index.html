@@ -355,6 +355,25 @@
     font-size:0.9rem;
     line-height:1.4;
   }
+  .searchbar{
+    max-width:640px;
+    margin:8px auto 0;
+    padding:0 12px;
+  }
+  .searchinput{
+    width:100%;
+    border:1px solid var(--card-border);
+    border-radius:10px;
+    padding:10px 12px;
+    font-size:0.95rem;
+    font-family:inherit;
+    color:var(--text);
+    background:#fff;
+    -webkit-appearance:none;
+  }
+  .searchinput:focus{
+    outline:2px solid var(--accent2);
+  }
   .detailtext{
     white-space:pre-wrap;
     font-size:0.95rem;
@@ -418,6 +437,9 @@
 <div id="viewHistory" style="display:none">
   <div class="topnav">
     <button class="navbtn" id="historyBack">← Terug</button>
+  </div>
+  <div class="searchbar">
+    <input type="search" id="historySearch" class="searchinput" placeholder="Zoeken…" autocomplete="off" autocapitalize="off">
   </div>
   <main id="historyList"></main>
 </div>
@@ -921,6 +943,18 @@ function openDetail(title, text, backFn){
   document.getElementById('detailBack').onclick = backFn;
 }
 
+// ---- Zoeken in geschiedenis (gedeeld door wachtboek- en meldingen-lijst) ----
+let historySearch = '';
+let historyRenderFn = null;
+function historyQuery(){ return historySearch.trim().toLowerCase(); }
+// Reset het zoekveld en onthoud welke lijst opnieuw getekend moet worden bij typen.
+function setHistoryContext(renderFn, placeholder){
+  historyRenderFn = renderFn;
+  historySearch = '';
+  const inp = document.getElementById('historySearch');
+  if (inp){ inp.value = ''; inp.placeholder = placeholder || 'Zoeken…'; }
+}
+
 // ---- Wachtboek-geschiedenis (laatste 30 dagen) ----
 const SHIFT_ORDER = { ochtend:0, middag:1, nacht:2 };
 const WB_KEY_RE = /^wachtboek_(\d{4}-\d{2}-\d{2})_(ochtend|middag|nacht)$/;
@@ -980,11 +1014,20 @@ function wachtboekHistoryEntries(){
 function renderWachtboekHistory(){
   const list = document.getElementById('historyList');
   list.innerHTML = '';
-  const entries = wachtboekHistoryEntries();
+  const q = historyQuery();
+  let entries = wachtboekHistoryEntries();
+  if (q){
+    entries = entries.filter(e=>{
+      const hay = (formatDateNL(e.date) + ' ' + SHIFTS[e.shiftKey].label + ' ' + e.texts.join(' ')).toLowerCase();
+      return hay.includes(q);
+    });
+  }
   if (!entries.length){
     const empty = document.createElement('div');
     empty.className = 'history-empty';
-    empty.textContent = 'Nog geen ingevulde wachtboeken in de laatste 30 dagen.';
+    empty.textContent = q
+      ? `Geen wachtboeken gevonden voor “${historySearch.trim()}”.`
+      : 'Nog geen ingevulde wachtboeken in de laatste 30 dagen.';
     list.appendChild(empty);
     return;
   }
@@ -1011,6 +1054,7 @@ function openWachtboekHistory(){
   showView('history');
   document.getElementById('appTitle').textContent = 'Geschiedenis';
   document.getElementById('historyBack').onclick = ()=> showView('wachtboek');
+  setHistoryContext(renderWachtboekHistory, 'Zoek in wachtboeken…');
   renderWachtboekHistory();
 }
 
@@ -1051,11 +1095,21 @@ function meldingSummary(fields){
 function renderMeldingHistory(){
   const list = document.getElementById('historyList');
   list.innerHTML = '';
-  const arr = loadMeldingHistory();
+  const q = historyQuery();
+  let arr = loadMeldingHistory();
+  if (q){
+    arr = arr.filter(entry=>{
+      const d = new Date(entry.ts);
+      const hay = (meldingDateLabel(d) + ' ' + MELDING_FIELDS.map(f=>entry.fields[f.key]||'').join(' ')).toLowerCase();
+      return hay.includes(q);
+    });
+  }
   if (!arr.length){
     const empty = document.createElement('div');
     empty.className = 'history-empty';
-    empty.textContent = 'Nog geen bewaarde meldingen.\nEen melding wordt bewaard zodra je op "Kopieer melding" tikt.';
+    empty.textContent = q
+      ? `Geen meldingen gevonden voor “${historySearch.trim()}”.`
+      : 'Nog geen bewaarde meldingen.\nEen melding wordt bewaard zodra je op "Kopieer melding" tikt.';
     list.appendChild(empty);
     return;
   }
@@ -1083,6 +1137,7 @@ function openMeldingHistory(){
   showView('history');
   document.getElementById('appTitle').textContent = 'Laatste meldingen';
   document.getElementById('historyBack').onclick = ()=> showView('melding');
+  setHistoryContext(renderMeldingHistory, 'Zoek in meldingen…');
   renderMeldingHistory();
 }
 
@@ -1194,6 +1249,10 @@ document.getElementById('clearMelding').addEventListener('click', ()=>{
 // Geschiedenis openen + kopiëren vanuit detailscherm
 document.getElementById('openWbHistory').addEventListener('click', openWachtboekHistory);
 document.getElementById('openMeldingHist').addEventListener('click', openMeldingHistory);
+document.getElementById('historySearch').addEventListener('input', (e)=>{
+  historySearch = e.target.value;
+  if (historyRenderFn) historyRenderFn();
+});
 document.getElementById('detailCopy').addEventListener('click', async ()=>{
   const ok = await copyText(detailCopyText);
   showToast(ok ? 'Gekopieerd!' : 'Kopiëren mislukt — selecteer handmatig');
