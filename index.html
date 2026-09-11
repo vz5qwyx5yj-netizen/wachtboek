@@ -1150,7 +1150,20 @@ function showToast(msg){
   toastTimer = setTimeout(()=> t.classList.remove('show'), 1800);
 }
 
+// Zet "slimme" iOS-interpunctie om naar gewone tekens, zodat plakken in
+// werk-programma's geen verminkte tekens (â€™, â€œ, â€") oplevert.
+function sanitizeForCopy(text){
+  return String(text)
+    .replace(/[‘’‚‛′]/g, "'")   // krul-apostrof / prime
+    .replace(/[“”„‟″]/g, '"')   // krul-aanhalingstekens
+    .replace(/[–—―]/g, '-')               // en/em-streep
+    .replace(/…/g, '...')                           // beletselteken
+    .replace(/[    ]/g, ' ')         // harde / smalle spaties
+    .replace(/[​‌‍﻿]/g, '');         // onzichtbare tekens
+}
+
 async function copyText(text){
+  text = sanitizeForCopy(text);
   try{
     if (navigator.clipboard && navigator.clipboard.writeText){
       await navigator.clipboard.writeText(text);
