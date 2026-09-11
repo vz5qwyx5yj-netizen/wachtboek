@@ -396,6 +396,7 @@
   </div>
 
   <div class="shiftbar" id="shiftBar"></div>
+  <div class="shiftbar" id="lijnBar"></div>
   <div class="datebar" id="dateBar"></div>
 
   <div class="reminderbar" id="reminderBar">
@@ -469,6 +470,7 @@ const SHIFTS = {
 let state = {
   shiftKey: null,
   dateKey: null,   // key used for storage, based on shift start date
+  lijn: 1,         // 1 of 2: sommige diensten sta je op 2 lijnen (elk een eigen wachtboek)
   hours: []        // array of {hour, text}
 };
 
@@ -515,8 +517,11 @@ function buildHourList(shiftKey){
   return hours;
 }
 
+// Lijn 1 houdt de oude sleutel (geen achtervoegsel) → bestaande gegevens blijven intact.
+// Lijn 2 krijgt "_L2" erachter, zodat het een volledig apart wachtboek is.
+function lijnSuffix(){ return state.lijn === 2 ? '_L2' : ''; }
 function storageKey(){
-  return `wachtboek_${state.dateKey}_${state.shiftKey}`;
+  return `wachtboek_${state.dateKey}_${state.shiftKey}${lijnSuffix()}`;
 }
 
 function loadFromStorage(){
@@ -568,6 +573,13 @@ function initShift(shiftKey, opts){
   render();
 }
 
+// Wissel tussen Lijn 1 en Lijn 2 (zelfde dienst, eigen opslag).
+function setLijn(n){
+  if (state.lijn === n) return;
+  state.lijn = n;
+  initShift(state.shiftKey);
+}
+
 function render(){
   const shift = SHIFTS[state.shiftKey];
   document.getElementById('shiftInfo').textContent =
@@ -583,6 +595,17 @@ function render(){
     btn.textContent = SHIFTS[key].label;
     btn.onclick = ()=> initShift(key);
     bar.appendChild(btn);
+  });
+
+  // lijn-knoppen (Lijn 1 / Lijn 2)
+  const lijnBar = document.getElementById('lijnBar');
+  lijnBar.innerHTML = '';
+  [1,2].forEach(n=>{
+    const btn = document.createElement('button');
+    btn.className = 'shiftbtn' + (n===state.lijn ? ' active' : '');
+    btn.textContent = 'Lijn ' + n;
+    btn.onclick = ()=> setLijn(n);
+    lijnBar.appendChild(btn);
   });
 
   const now = new Date();
@@ -783,7 +806,7 @@ function reminderEnabled(){
   return localStorage.getItem('wachtboek_reminder_enabled') !== '0'; // standaard aan
 }
 function reminderDismissKey(){
-  return `wachtboek_reminderdismissed_${state.dateKey}_${state.shiftKey}`;
+  return `wachtboek_reminderdismissed_${state.dateKey}_${state.shiftKey}${lijnSuffix()}`;
 }
 function shiftHasContent(){
   return state.hours.some(h => {
@@ -957,7 +980,7 @@ function setHistoryContext(renderFn, placeholder){
 
 // ---- Wachtboek-geschiedenis (laatste 30 dagen) ----
 const SHIFT_ORDER = { ochtend:0, middag:1, nacht:2 };
-const WB_KEY_RE = /^wachtboek_(\d{4}-\d{2}-\d{2})_(ochtend|middag|nacht)$/;
+const WB_KEY_RE = /^wachtboek_(\d{4}-\d{2}-\d{2})_(ochtend|middag|nacht)(_L2)?$/;
 
 function parseDateKey(key){
   const [y,m,d] = key.split('-').map(Number);
@@ -1006,9 +1029,9 @@ function wachtboekHistoryEntries(){
     try{ texts = JSON.parse(localStorage.getItem(key)); }catch(e){ continue; }
     if (!Array.isArray(texts)) continue;
     if (!texts.some(t => t && t.trim() && t.trim() !== DEFAULT_TEXT)) continue;
-    entries.push({ date:d, shiftKey:m[2], texts });
+    entries.push({ date:d, shiftKey:m[2], lijn: m[3] ? 2 : 1, texts });
   }
-  entries.sort((a,b)=> (b.date - a.date) || (SHIFT_ORDER[a.shiftKey] - SHIFT_ORDER[b.shiftKey]));
+  entries.sort((a,b)=> (b.date - a.date) || (SHIFT_ORDER[a.shiftKey] - SHIFT_ORDER[b.shiftKey]) || (a.lijn - b.lijn));
   return entries;
 }
 function renderWachtboekHistory(){
@@ -1018,7 +1041,7 @@ function renderWachtboekHistory(){
   let entries = wachtboekHistoryEntries();
   if (q){
     entries = entries.filter(e=>{
-      const hay = (formatDateNL(e.date) + ' ' + SHIFTS[e.shiftKey].label + ' ' + e.texts.join(' ')).toLowerCase();
+      const hay = (formatDateNL(e.date) + ' ' + SHIFTS[e.shiftKey].label + ' ' + (e.lijn === 2 ? 'lijn 2 ' : '') + e.texts.join(' ')).toLowerCase();
       return hay.includes(q);
     });
   }
@@ -1039,11 +1062,12 @@ function renderWachtboekHistory(){
     title.textContent = formatDateNL(e.date);
     const sub = document.createElement('div');
     sub.className = 'history-item-sub';
-    sub.textContent = SHIFTS[e.shiftKey].label + ' · ' + (shortSummary(e.texts) || 'ingevuld');
+    const lijnLabel = e.lijn === 2 ? 'Lijn 2 · ' : '';
+    sub.textContent = SHIFTS[e.shiftKey].label + ' · ' + lijnLabel + (shortSummary(e.texts) || 'ingevuld');
     item.appendChild(title);
     item.appendChild(sub);
     item.onclick = ()=> openDetail(
-      `${formatDateNL(e.date)} — ${SHIFTS[e.shiftKey].label}`,
+      `${formatDateNL(e.date)} — ${SHIFTS[e.shiftKey].label}${e.lijn === 2 ? ' (Lijn 2)' : ''}`,
       wachtboekTextFrom(e.shiftKey, e.texts),
       openWachtboekHistory
     );
